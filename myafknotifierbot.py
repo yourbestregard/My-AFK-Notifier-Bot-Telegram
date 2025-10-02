@@ -61,16 +61,16 @@ def format_duration(seconds):
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
-        "Halo! Saya adalah AFK Notifier Bot.\n\n"
-        "• `/afk [alasan]` - Mengatur status AFK.\n"
-        "• `/back` - Kembali online.\n"
-        "• `/help` - Menampilkan pesan ini.\n"
+        "Halo! Saya adalah AFK Notifier Bot.\n"
+        "• /afk [alasan] - Mengatur status AFK.\n"
+        "• /back - Kembali online (opsional).\n"
+        "• /help - Menampilkan pesan ini.\n\n"
         "Hubungi @yourbestregard, gabung @azmunaashome."
     )
 
 async def set_afk(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
-    reason = " ".join(context.args) if context.args else "Tidak ada alasan"
+    reason = " ".join(context.args) if context.args else "(Tidak ada alasan)"
     afk_users[user.id] = {
         "reason": reason,
         "since": datetime.now(timezone.utc),
@@ -79,9 +79,11 @@ async def set_afk(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if user.username:
         username_to_id[user.username.lower()] = user.id
     save_data()
-    await update.message.reply_text(f"{user.first_name} sekarang AFK. Alasan: {reason}")
+    await update.message.reply_text(
+        f"{user.first_name} sekarang AFK.\n"
+        f"Alasan: {reason}."
+        )
 
-# ## FUNGSI INI TELAH DIPERBARUI ##
 async def unset_afk(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     if user.id in afk_users:
@@ -100,20 +102,45 @@ async def unset_afk(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text(
             f"Selamat datang kembali, {user.first_name}!\n"
             f"Kamu telah AFK selama **{duration_str}**.\n"
-            f"**Alasan:** {html.escape(reason)}",
+            f"Alasan: {html.escape(reason)}.",
             parse_mode='Markdown'
         )
     else:
         await update.message.reply_text("Kamu memang tidak sedang AFK.")
 
-# ## FUNGSI INI TELAH DIPERBARUI ##
 async def check_afk(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     message = update.effective_message
-    if not message: return # Abaikan jika tidak ada pesan (misal: update service)
+    if not message: return
         
-    sender_id = update.effective_user.id
-    notified_ids = set()
+    sender = update.effective_user
+    sender_id = sender.id
 
+    # Cek jika pengirim pesan sedang AFK.
+    if sender_id in afk_users:
+        afk_info = afk_users[sender_id]
+        start_time = afk_info["since"]
+        reason = afk_info["reason"]
+        duration_seconds = (datetime.now(timezone.utc) - start_time).total_seconds()
+        duration_str = format_duration(duration_seconds)
+        
+        # Hapus pengguna dari daftar AFK
+        del afk_users[sender_id]
+        if sender.username and sender.username.lower() in username_to_id:
+            del username_to_id[sender.username.lower()]
+        save_data()
+        
+        # Kirim pesan bahwa pengguna sudah kembali (bisa di-reply ke pesannya)
+        await message.reply_text(
+            f"{sender.first_name} kembali online.\n"
+            f"Telah AFK selama **{duration_str}**.\n"
+            f"Alasan: {html.escape(reason)}.",
+            parse_mode='Markdown'
+        )
+        # Hentikan proses, karena tugas untuk pesan ini sudah selesai.
+        return
+
+    # Jika pengirim tidak AFK, cek apakah dia mention/reply orang lain.
+    notified_ids = set()
     async def send_afk_notification(user_id):
         if user_id in notified_ids: return
         afk_info = afk_users[user_id]
@@ -122,8 +149,8 @@ async def check_afk(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         duration_str = format_duration(duration_seconds)
         await message.reply_text(
             f"Pengguna **{html.escape(afk_info['name'])}** sedang AFK.\n"
-            f"**Alasan:** {html.escape(afk_info['reason'])}\n"
-            f"**Sejak:** {duration_str} yang lalu.",
+            f"Alasan: {html.escape(afk_info['reason'])}.\n"
+            f"Sejak: {duration_str} yang lalu.",
             parse_mode='Markdown'
         )
         notified_ids.add(user_id)
@@ -131,7 +158,6 @@ async def check_afk(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if message.reply_to_message:
         if message.reply_to_message.forum_topic_created:
             return
-
         replied_user_id = message.reply_to_message.from_user.id
         if replied_user_id in afk_users and replied_user_id != sender_id:
             await send_afk_notification(replied_user_id)
@@ -145,7 +171,6 @@ async def check_afk(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 username_mentioned = message.text[entity.offset:entity.offset + entity.length]
                 cleaned_username = username_mentioned.lstrip('@').lower()
                 user_id_to_check = username_to_id.get(cleaned_username)
-            
             if user_id_to_check and user_id_to_check in afk_users and user_id_to_check != sender_id:
                 await send_afk_notification(user_id_to_check)
 
