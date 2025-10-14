@@ -48,7 +48,7 @@ def load_data():
                         "name": info["name"]
                     }
                 logger.info("Data AFK berhasil dimuat dari file.")
-            except json.JSONDecodeError:
+            except (json.JSONDecodeError, AttributeError):
                 logger.warning("File data kosong atau rusak, memulai dengan data kosong.")
     else:
         logger.info("File data tidak ditemukan, memulai dengan data kosong.")
@@ -64,7 +64,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "Halo! Saya adalah AFK Notifier Bot.\n"
         "• /afk [alasan] - Mengatur status AFK.\n"
         "• /back - Kembali online (opsional).\n"
-        "• /help - Menampilkan pesan ini.\n\n"
+        "• /help - Menampilkan pesan ini.\n"
         "Hubungi @yourbestregard, gabung @azmunaashome."
     )
 
@@ -109,10 +109,11 @@ async def unset_afk(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text("Kamu memang tidak sedang AFK.")
 
 async def check_afk(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    message = update.effective_message
-    if not message: return
-        
-    sender = update.effective_user
+    if not update.message:
+        return
+
+    message = update.message
+    sender = message.from_user
     sender_id = sender.id
 
     # Cek jika pengirim pesan sedang AFK.
